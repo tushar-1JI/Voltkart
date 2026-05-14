@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Voltkart | 10 Min Electrical Delivery</title>
+  <meta name="description" content="India's fastest electrical hardware delivery. Get switches, cables, breakers & tools in 10 minutes. Cash on delivery available.">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+  <div id="app-header"></div>
+  <main>
+    <!-- HERO -->
+    <section class="hero">
+      <div class="container">
+        <h1>Power Tools & Hardware<br>in <span>10 Minutes.</span></h1>
+        <p>Don't pause your project. From wire connectors to heavy-duty MCBs, we deliver while your tea cools down.</p>
+        <a href="listing.html" class="btn btn-accent">⚡ Order Now</a>
+        <a href="tracking.html" class="btn btn-outline" style="margin-left:12px">📍 Track Order</a>
+      </div>
+    </section>
+
+    <!-- CATEGORIES -->
+    <section class="section">
+      <div class="container">
+        <h2 class="section-title">🗂️ Shop Categories</h2>
+        <p class="section-sub">Everything you need for your electrical project</p>
+        <div class="cat-grid" id="catGrid"></div>
+      </div>
+    </section>
+
+    <!-- LIGHTNING DEALS -->
+    <section class="section" style="background:var(--bg2)">
+      <div class="container">
+        <h2 class="section-title">⚡ Lightning Deals</h2>
+        <p class="section-sub">Top products at the best prices — delivered in 10 minutes</p>
+        <div class="prod-grid" id="dealsGrid"></div>
+      </div>
+    </section>
+
+    <!-- TRACKING PROMO -->
+    <section class="section">
+      <div class="container">
+        <div class="promo-card">
+          <h3>📍 Track Every Volt!</h3>
+          <p>Real-time GPS tracking for every order. See exactly where your connectors are on the map.</p>
+          <a href="tracking.html" class="btn btn-accent">🗺️ Try Tracking</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ALL PRODUCTS -->
+    <section class="section">
+      <div class="container">
+        <h2 class="section-title">🔥 All Products</h2>
+        <p class="section-sub">Browse our complete catalog</p>
+        <div class="prod-grid" id="allGrid"></div>
+      </div>
+    </section>
+  </main>
+  <div id="app-footer"></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    initPage('home');
+
+    // Categories
+    const cats = DB.getCategories();
+    document.getElementById('catGrid').innerHTML = cats.map(c =>
+      `<a href="listing.html?cat=${c.slug}" class="cat-card">
+        <div class="icon">${c.icon}</div>
+        <div class="name">${c.name}</div>
+        <div class="count">${c.count} items</div>
+      </a>`
+    ).join('');
+
+    // Lightning deals (first 4)
+    const deals = DB.getProducts().slice(0,4);
+    document.getElementById('dealsGrid').innerHTML = deals.map(p => productCardHTML(p)).join('');
+
+    // All products
+    const all = DB.getProducts();
+    document.getElementById('allGrid').innerHTML = all.map(p => productCardHTML(p)).join('');
+  </script>
+</body>
+</html>

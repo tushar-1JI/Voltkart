@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Products | Voltkart</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+  <div id="app-header"></div>
+  <main class="container">
+    <div class="breadcrumb"><a href="index.html">Home</a> <span>›</span> <a href="listing.html">Categories</a> <span>›</span> <span id="bcCat">All Products</span></div>
+    <h2 class="section-title" id="pageTitle">🔲 All Products</h2>
+    <p class="section-sub" id="pageSub">Premium products delivered in 10 minutes.</p>
+
+    <div class="listing-layout">
+      <aside class="filter-sidebar">
+        <h3 style="margin-bottom:20px;font-size:1rem">🔍 Filters</h3>
+        <div class="filter-group"><h4>Brand</h4><div id="brandFilters"></div></div>
+        <div class="filter-group"><h4>Price Range (₹)</h4><div style="display:flex;justify-content:space-between;font-size:.8rem;color:var(--text2)"><span>₹0</span><span id="priceVal">₹5000</span></div><input type="range" min="0" max="5000" step="50" value="5000" id="priceRange" oninput="applyFilters()"></div>
+        <div class="filter-group"><h4>Min Rating</h4>
+          <label><input type="checkbox" value="4" class="ratingFilter" onchange="applyFilters()"> ★★★★ & up</label>
+          <label><input type="checkbox" value="3" class="ratingFilter" onchange="applyFilters()"> ★★★ & up</label>
+        </div>
+        <button class="btn btn-outline btn-sm" onclick="clearFilters()" style="width:100%;justify-content:center">Clear Filters</button>
+      </aside>
+
+      <div>
+        <div class="sort-bar">
+          <span id="resultCount" style="color:var(--text2);font-size:.9rem"></span>
+          <select id="sortSelect" onchange="applyFilters()">
+            <option value="">Relevance</option>
+            <option value="price_asc">Price: Low → High</option>
+            <option value="price_desc">Price: High → Low</option>
+            <option value="rating">Top Rated</option>
+          </select>
+        </div>
+        <div class="prod-grid" id="prodGrid"></div>
+      </div>
+    </div>
+  </main>
+  <div id="app-footer"></div>
+  <script src="data.js"></script><script src="app.js"></script>
+  <script>
+    initPage('listing');
+    const params = new URLSearchParams(location.search);
+    const cat = params.get('cat');
+    const searchQ = params.get('search');
+
+    if(cat){
+      document.getElementById('bcCat').textContent = cat;
+      document.getElementById('pageTitle').innerHTML = `🔲 ${cat}`;
+      document.getElementById('pageSub').textContent = `Premium ${cat.toLowerCase()} delivered in 10 minutes.`;
+      document.title = cat + ' | Voltkart';
+    }
+    if(searchQ){
+      document.getElementById('bcCat').textContent = 'Search: '+searchQ;
+      document.getElementById('pageTitle').innerHTML = `🔍 "${searchQ}"`;
+    }
+
+    // Build brand filters
+    const brands = [...new Set(DB.getProducts({category:cat||undefined}).map(p=>p.brand))];
+    document.getElementById('brandFilters').innerHTML = brands.map(b=>
+      `<label><input type="checkbox" value="${b}" class="brandFilter" onchange="applyFilters()"> ${b}</label>`
+    ).join('');
+
+    function applyFilters(){
+      const selBrands = [...document.querySelectorAll('.brandFilter:checked')].map(e=>e.value);
+      const maxPrice = +document.getElementById('priceRange').value;
+      document.getElementById('priceVal').textContent = '₹'+maxPrice;
+      const ratingChecks = [...document.querySelectorAll('.ratingFilter:checked')].map(e=>+e.value);
+      const minRating = ratingChecks.length ? Math.min(...ratingChecks) : 0;
+      const sort = document.getElementById('sortSelect').value;
+
+      let products = DB.getProducts({
+        category: cat||undefined,
+        maxPrice, minRating,
+        sort: sort||undefined,
+        search: searchQ||undefined
+      });
+      if(selBrands.length) products = products.filter(p=>selBrands.includes(p.brand));
+
+      document.getElementById('resultCount').textContent = products.length + ' products found';
+      document.getElementById('prodGrid').innerHTML = products.length
+        ? products.map(p=>productCardHTML(p)).join('')
+        : '<div class="empty-state"><div class="icon">🔍</div><h3>No products found</h3><p>Try adjusting your filters</p></div>';
+    }
+
+    function clearFilters(){
+      document.querySelectorAll('.brandFilter,.ratingFilter').forEach(e=>e.checked=false);
+      document.getElementById('priceRange').value=5000;
+      document.getElementById('sortSelect').value='';
+      applyFilters();
+    }
+
+    applyFilters();
+  </script>
+</body>
+</html>

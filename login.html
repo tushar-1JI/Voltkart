@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Login | Voltkart</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+  <div id="app-header"></div>
+  <main>
+    <div class="auth-container">
+      <div class="auth-box" id="loginBox">
+        <h2>🔐 Login to Voltkart</h2>
+        <div class="error-msg" id="loginError"></div>
+        <div class="form-group"><label>Email</label><input type="email" id="loginEmail" placeholder="your@email.com"></div>
+        <div class="form-group"><label>Password</label><input type="password" id="loginPass" placeholder="••••••••"></div>
+        <button class="btn btn-accent" style="width:100%;justify-content:center" onclick="doLogin()">⚡ Login</button>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+          <div class="auth-switch" style="margin:0">Don't have an account? <a href="#" onclick="showRegister()">Register</a></div>
+          <a href="#" onclick="showForgot()" style="color:var(--accent);font-size:.85rem;font-weight:500">Forgot Password?</a>
+        </div>
+      </div>
+
+      <div class="auth-box" id="forgotBox" style="display:none">
+        <h2>🔑 Reset Password</h2>
+        <p style="color:var(--text2);font-size:.85rem;margin-bottom:20px">Enter your registered email and set a new password.</p>
+        <div class="error-msg" id="forgotError"></div>
+        <div id="forgotSuccess" style="display:none;background:rgba(34,197,94,.1);color:#22c55e;padding:10px;border-radius:var(--radius-sm);font-size:.85rem;margin-bottom:12px"></div>
+        <div class="form-group"><label>Registered Email</label><input type="email" id="forgotEmail" placeholder="your@email.com"></div>
+        <div class="form-group"><label>New Password</label><input type="password" id="forgotNewPass" placeholder="Min 6 characters"></div>
+        <div class="form-group"><label>Confirm New Password</label><input type="password" id="forgotConfirmPass" placeholder="Re-enter new password"></div>
+        <button class="btn btn-accent" style="width:100%;justify-content:center" onclick="doReset()">🔑 Reset Password</button>
+        <div class="auth-switch">Remember your password? <a href="#" onclick="showLogin()">Login</a></div>
+      </div>
+
+      <div class="auth-box" id="registerBox" style="display:none">
+        <h2>📝 Create Account</h2>
+        <div class="error-msg" id="regError"></div>
+        <div class="form-group"><label>Full Name</label><input type="text" id="regName" placeholder="Your name"></div>
+        <div class="form-group"><label>Email</label><input type="email" id="regEmail" placeholder="your@email.com"></div>
+        <div class="form-group"><label>Phone</label><input type="tel" id="regPhone" placeholder="+91 98765 43210"></div>
+        <div class="form-group"><label>Delivery Address</label><textarea id="regAddress" rows="2" placeholder="House no, Street, Area, City"></textarea></div>
+        <div class="form-group"><label>Password</label><input type="password" id="regPass" placeholder="Min 6 characters"></div>
+        <button class="btn btn-accent" style="width:100%;justify-content:center" onclick="doRegister()">📝 Create Account</button>
+        <div class="auth-switch">Already have an account? <a href="#" onclick="showLogin()">Login</a></div>
+      </div>
+    </div>
+  </main>
+  <div id="app-footer"></div>
+  <script src="data.js"></script><script src="app.js"></script>
+  <script>
+    initPage('login');
+    if(DB.isLoggedIn()) window.location = 'profile.html';
+
+    function hideAll(){document.getElementById('loginBox').style.display='none';document.getElementById('registerBox').style.display='none';document.getElementById('forgotBox').style.display='none';}
+    function showLogin(){hideAll();document.getElementById('loginBox').style.display='';}
+    function showRegister(){hideAll();document.getElementById('registerBox').style.display='';}
+    function showForgot(){hideAll();document.getElementById('forgotBox').style.display='';}
+
+    function doReset(){
+      const email = document.getElementById('forgotEmail').value.trim();
+      const newPass = document.getElementById('forgotNewPass').value;
+      const confirmPass = document.getElementById('forgotConfirmPass').value;
+      if(!email||!newPass||!confirmPass){showErr('forgotError','Please fill all fields');return;}
+      if(newPass.length<6){showErr('forgotError','Password must be at least 6 characters');return;}
+      if(newPass!==confirmPass){showErr('forgotError','Passwords do not match');return;}
+      // Find user by email and update password
+      const users = JSON.parse(localStorage.getItem('vk_users')||'[]');
+      const user = users.find(u=>u.email===email);
+      if(!user){showErr('forgotError','No account found with this email');return;}
+      user.password = newPass;
+      localStorage.setItem('vk_users', JSON.stringify(users));
+      document.getElementById('forgotSuccess').textContent='✅ Password reset successfully! You can now login.';
+      document.getElementById('forgotSuccess').style.display='block';
+      document.getElementById('forgotEmail').value='';
+      document.getElementById('forgotNewPass').value='';
+      document.getElementById('forgotConfirmPass').value='';
+      setTimeout(()=>showLogin(),2000);
+    }
+
+    function doLogin(){
+      const email = document.getElementById('loginEmail').value.trim();
+      const pass = document.getElementById('loginPass').value;
+      if(!email||!pass){showErr('loginError','Please fill all fields');return;}
+      const r = DB.login(email, pass);
+      if(r.ok){showToast('Welcome back, '+r.user.name+'!');setTimeout(()=>window.location='index.html',800);}
+      else{showErr('loginError',r.msg);}
+    }
+
+    function doRegister(){
+      const name = document.getElementById('regName').value.trim();
+      const email = document.getElementById('regEmail').value.trim();
+      const phone = document.getElementById('regPhone').value.trim();
+      const address = document.getElementById('regAddress').value.trim();
+      const pass = document.getElementById('regPass').value;
+      if(!name||!email||!pass){showErr('regError','Please fill all required fields');return;}
+      if(pass.length<6){showErr('regError','Password must be at least 6 characters');return;}
+      const r = DB.register(name, email, phone, pass, address);
+      if(r.ok){showToast('Account created! Welcome '+name);setTimeout(()=>window.location='index.html',800);}
+      else{showErr('regError',r.msg);}
+    }
+
+    function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';setTimeout(()=>e.style.display='none',4000);}
+
+    // Enter key
+    document.querySelectorAll('input').forEach(i=>i.addEventListener('keydown',e=>{if(e.key==='Enter'){
+      if(document.getElementById('loginBox').style.display!=='none')doLogin();else doRegister();
+    }}));
+  </script>
+</body>
+</html>

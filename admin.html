@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Admin Panel | Voltkart</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+  <style>.leaflet-container{background:var(--bg2)!important} #shopMap{height:400px;border-radius:var(--radius);margin-top:12px}</style>
+</head>
+<body>
+  <div id="app-header"></div>
+  <main class="container" style="padding-top:24px;padding-bottom:60px">
+    <h2 class="section-title">⚙️ Admin Panel</h2>
+    <p class="section-sub">Manage orders, confirm them, and assign riders</p>
+
+    <div class="admin-tabs">
+      <button class="admin-tab active" onclick="showTab('orders',this)">📦 Orders</button>
+      <button class="admin-tab" onclick="showTab('riders',this)">🏍️ Riders</button>
+      <button class="admin-tab" onclick="showTab('stats',this)">📊 Stats</button>
+      <button class="admin-tab" onclick="showTab('settings',this)">🏪 Settings</button>
+    </div>
+
+    <div id="ordersTab"></div>
+    <div id="ridersTab" style="display:none"></div>
+    <div id="statsTab" style="display:none"></div>
+    <div id="settingsTab" style="display:none"></div>
+  </main>
+  <div id="app-footer"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="data.js"></script><script src="app.js"></script>
+  <script>
+    initPage('admin');
+    if(!DB.isAdmin()){showToast('Admin access only!');setTimeout(()=>window.location='login.html',500);throw'';}
+
+    function showTab(tab,btn){
+      document.querySelectorAll('[id$="Tab"]').forEach(t=>t.style.display='none');
+      document.getElementById(tab+'Tab').style.display='';
+      document.querySelectorAll('.admin-tab').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      if(tab==='orders') renderOrders();
+      if(tab==='riders') renderRiders();
+      if(tab==='stats') renderStats();
+      if(tab==='settings') renderSettings();
+    }
+
+    function renderOrders(){
+      const orders = DB.getOrders().sort((a,b)=>b.placedAt-a.placedAt);
+      if(!orders.length){document.getElementById('ordersTab').innerHTML='<div class="empty-state"><div class="icon">📦</div><h3>No orders yet</h3></div>';return;}
+
+      const availableRiders = DB.getAvailableRiders();
+
+      document.getElementById('ordersTab').innerHTML = orders.map(o => {
+        let actions = '';
+        if(o.status==='placed') actions = `<button class="btn btn-sm btn-accent" onclick="confirmOrd('${o.id}')">✅ Confirm</button>`;
+        if(o.status==='confirmed') actions = `<button class="btn btn-sm" style="background:#a855f7;color:#fff" onclick="packOrd('${o.id}')">📦 Pack</button>`;
+        if(o.status==='packed') actions = `
+          <select class="rider-select" id="rider_${o.id}">
+            <option value="">Select rider...</option>
+            ${availableRiders.map(r=>`<option value="${r.id}">${r.name} (⭐${r.rating})</option>`).join('')}
+          </select>
+          <button class="btn btn-sm" style="background:#f97316;color:#fff" onclick="assignRd('${o.id}')">🏍️ Assign & Dispatch</button>`;
+        if(o.status==='on_the_way') actions = `<button class="btn btn-sm" style="background:#22c55e;color:#fff" onclick="deliverOrd('${o.id}')">✅ Mark Delivered</button>`;
+        if(o.status==='delivered') actions = `<span style="color:#22c55e;font-weight:600">✅ Completed</span>`;
+
+        return `<div class="admin-card">
+          <div style="display:flex;justify-content:space-between;align-items:start;flex-wrap:wrap;gap:12px">
+            <div>
+              <h3>${o.id}</h3>
+              <div class="meta">👤 ${o.userName} • 📱 ${o.userPhone} • 💰 ₹${o.total} COD</div>
+              <div class="meta">📍 ${o.userAddress||'No address'}</div>
+              <div class="meta">🕐 ${new Date(o.placedAt).toLocaleString('en-IN')}</div>
+              <div style="margin-top:4px">${o.items.map(i=>`<span style="background:var(--bg3);padding:2px 8px;border-radius:12px;font-size:.75rem;margin-right:4px">${i.name.split(' ').slice(0,3).join(' ')} ×${i.qty}</span>`).join('')}</div>
+              ${o.riderName?`<div class="meta" style="margin-top:4px">🏍️ Rider: <strong>${o.riderName}</strong></div>`:''}
+            </div>
+            <div style="text-align:right">
+              <span class="status-badge status-${o.status}" style="margin-bottom:8px;display:block">${o.status.replace(/_/g,' ').toUpperCase()}</span>
+              <div style="margin-top:8px">${actions}</div>
+            </div>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function confirmOrd(id){DB.confirmOrder(id);showToast('✅ Order confirmed!');renderOrders();}
+    function packOrd(id){DB.packOrder(id);showToast('📦 Order packed!');renderOrders();}
+    function assignRd(id){
+      const rid = document.getElementById('rider_'+id).value;
+      if(!rid){showToast('⚠️ Select a rider first!');return;}
+      DB.assignRider(id,rid);showToast('🏍️ Rider assigned!');renderOrders();
+    }
+    function deliverOrd(id){DB.deliverOrder(id);showToast('✅ Order delivered!');renderOrders();}
+
+    function renderRiders(){
+      const riders = DB.getRiders();
+      document.getElementById('ridersTab').innerHTML = riders.map(r => `
+        <div class="admin-card">
+          <div style="display:flex;align-items:center;gap:16px">
+            <div class="rider-avatar">🏍️</div>
+            <div style="flex:1">
+              <h3>${r.name}</h3>
+              <div class="meta">📱 ${r.phone} • ${r.vehicle} • ${r.plate} • ⭐ ${r.rating}</div>
+            </div>
+            <span class="status-badge ${r.available?'status-delivered':'status-on_the_way'}">${r.available?'AVAILABLE':'ON DELIVERY'}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function renderStats(){
+      const orders = DB.getOrders();
+      const total = orders.length;
+      const delivered = orders.filter(o=>o.status==='delivered').length;
+      const revenue = orders.reduce((s,o)=>s+o.total,0);
+      const pending = orders.filter(o=>o.status!=='delivered').length;
+
+      document.getElementById('statsTab').innerHTML = `
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px">
+          <div class="admin-card" style="text-align:center"><div style="font-size:2rem;font-weight:900;color:var(--accent)">${total}</div><div class="meta">Total Orders</div></div>
+          <div class="admin-card" style="text-align:center"><div style="font-size:2rem;font-weight:900;color:#22c55e">${delivered}</div><div class="meta">Delivered</div></div>
+          <div class="admin-card" style="text-align:center"><div style="font-size:2rem;font-weight:900;color:#f97316">${pending}</div><div class="meta">Pending</div></div>
+          <div class="admin-card" style="text-align:center"><div style="font-size:2rem;font-weight:900;color:var(--accent)">₹${revenue.toLocaleString()}</div><div class="meta">Revenue</div></div>
+        </div>
+        <div class="admin-card" style="margin-top:20px"><h3>🏍️ Riders</h3><div class="meta">${DB.getAvailableRiders().length} of ${DB.getRiders().length} available</div></div>`;
+    }
+
+    renderOrders();
+
+    // ===== SETTINGS TAB =====
+    let shopMap = null, shopMarker = null;
+    function renderSettings(){
+      const shop = DB.getShopSettings();
+      document.getElementById('settingsTab').innerHTML = `
+        <div class="admin-card">
+          <h3 style="margin-bottom:16px">🏪 Shop / Store Settings</h3>
+          <p style="color:var(--text2);font-size:.85rem;margin-bottom:20px">Set your shop details and location. This will be shown on the tracking map as the delivery origin ("Yahan se delivery hogi").</p>
+          <div class="form-group"><label>Shop Name</label><input type="text" id="shopName" value="${shop.name}" placeholder="Your shop name"></div>
+          <div class="form-group"><label>Shop Address</label><textarea id="shopAddress" rows="2" placeholder="Full shop address">${shop.address}</textarea></div>
+          <div class="form-group"><label>Shop Phone</label><input type="tel" id="shopPhone" value="${shop.phone}" placeholder="+91 98765 43210"></div>
+          <div class="form-group" style="display:flex;gap:12px">
+            <div style="flex:1"><label>Latitude</label><input type="number" step="any" id="shopLat" value="${shop.lat}"></div>
+            <div style="flex:1"><label>Longitude</label><input type="number" step="any" id="shopLng" value="${shop.lng}"></div>
+          </div>
+          <button class="btn btn-accent btn-sm" onclick="saveShop()" style="margin-bottom:16px">💾 Save Shop Settings</button>
+        </div>
+        <div class="admin-card">
+          <h3 style="margin-bottom:4px">📍 Set Shop Location on Map</h3>
+          <p style="color:var(--text2);font-size:.85rem;margin-bottom:8px">👆 Map pe click karo apni shop ki location set karne ke liye. Ye point tracking page par "🏪 Store" ke roop mein dikhega.</p>
+          <div id="shopMap"></div>
+        </div>`;
+
+      // Init map after DOM update
+      setTimeout(()=>{
+        if(shopMap){ shopMap.remove(); shopMap=null; }
+        shopMap = L.map('shopMap',{zoomControl:true}).setView([shop.lat, shop.lng], 16);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+          attribution:'©OpenStreetMap ©CARTO', maxZoom:19
+        }).addTo(shopMap);
+
+        // Shop marker
+        shopMarker = L.marker([shop.lat, shop.lng],{
+          icon: L.divIcon({html:'<div style="font-size:2rem;filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))">🏪</div>',className:'',iconSize:[40,40],iconAnchor:[20,40]}),
+          draggable: true
+        }).addTo(shopMap).bindPopup('<b>'+shop.name+'</b><br>'+shop.address).openPopup();
+
+        // Drag marker to update
+        shopMarker.on('dragend', function(e){
+          const ll = e.target.getLatLng();
+          document.getElementById('shopLat').value = ll.lat.toFixed(6);
+          document.getElementById('shopLng').value = ll.lng.toFixed(6);
+          showToast('📍 Location updated! Click Save to confirm.');
+        });
+
+        // Click map to move marker
+        shopMap.on('click', function(e){
+          shopMarker.setLatLng(e.latlng);
+          document.getElementById('shopLat').value = e.latlng.lat.toFixed(6);
+          document.getElementById('shopLng').value = e.latlng.lng.toFixed(6);
+          showToast('📍 Location updated! Click Save to confirm.');
+        });
+
+        // Add a circle radius around shop (delivery area ~2km)
+        L.circle([shop.lat, shop.lng], {radius:2000, color:'var(--accent)', fillColor:'var(--accent)', fillOpacity:0.08, weight:1, dashArray:'6,6'}).addTo(shopMap);
+
+      }, 100);
+    }
+
+    function saveShop(){
+      const data = {
+        name: document.getElementById('shopName').value.trim(),
+        address: document.getElementById('shopAddress').value.trim(),
+        phone: document.getElementById('shopPhone').value.trim(),
+        lat: parseFloat(document.getElementById('shopLat').value),
+        lng: parseFloat(document.getElementById('shopLng').value)
+      };
+      if(!data.name || !data.address){showToast('⚠️ Name and address are required!');return;}
+      DB.saveShopSettings(data);
+      showToast('✅ Shop settings saved!');
+      renderSettings();
+    }
+  </script>
+</body>
+</html>

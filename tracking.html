@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Order Tracking | Voltkart</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+  <style>.leaflet-container{background:var(--bg2)!important}</style>
+</head>
+<body>
+  <div id="app-header"></div>
+  <main>
+    <div id="trackingContent"></div>
+  </main>
+  <div id="app-footer"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="data.js"></script><script src="app.js"></script>
+  <script>
+    initPage('tracking');
+
+    const oid = new URLSearchParams(location.search).get('id');
+    const orders = DB.getOrders();
+    const order = oid ? DB.getOrder(oid) : (orders.length ? orders[orders.length-1] : null);
+
+    if(!order){
+      document.getElementById('trackingContent').innerHTML = `<div class="container"><div class="empty-state"><div class="icon">📦</div><h3>No orders to track</h3><p>Place an order first to see tracking.</p><a href="listing.html" class="btn btn-accent">🛒 Shop Now</a></div></div>`;
+    } else {
+      // Countdown
+      const elapsed = Date.now() - order.placedAt;
+      let remaining = Math.max(0, order.estimatedDelivery - elapsed);
+      if(order.status === 'delivered') remaining = 0;
+
+      function fmtTime(ms){
+        const m = Math.floor(ms/60000); const s = Math.floor((ms%60000)/1000);
+        return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      }
+
+      const rider = order.riderId ? DB.getRider(order.riderId) : null;
+      const timeline = order.timeline || [];
+
+      // Default steps
+      const steps = ['Ordered','Confirmed','Packed','On the Way','Delivered'];
+      const doneSteps = timeline.map(t=>t.status);
+
+      document.getElementById('trackingContent').innerHTML = `
+        <section class="tracking-hero">
+          <div class="container">
+            <p style="color:var(--text2)">Order ${order.id}</p>
+            <h2 style="margin:8px 0">Arriving in</h2>
+            <div class="countdown" id="countdown">${order.status==='delivered'?'Delivered ✅':fmtTime(remaining)}</div>
+            <p style="color:var(--text2);font-size:.9rem">Order placed: ${new Date(order.placedAt).toLocaleString('en-IN')}</p>
+            <span class="status-badge status-${order.status}" style="margin-top:8px;font-size:.9rem;padding:8px 20px">${order.status.replace(/_/g,' ').toUpperCase()}</span>
+          </div>
+        </section>
+
+        <div class="container">
+          <div class="tracking-layout">
+            <div class="map-container"><div id="trackingMap"></div></div>
+            <div>
+              <div class="timeline">
+                ${steps.map(st => {
+                  const t = timeline.find(t=>t.status===st);
+                  const done = !!t;
+                  const active = t && t.active;
+                  return `<div class="timeline-item">
+                    <div class="timeline-dot ${done?'done':''} ${active?'active':''}">${done?'✓':'○'}</div>
+                    <div class="timeline-content"><h4>${st}</h4><p>${t?t.time:'Pending'}</p></div>
+                  </div>`;
+                }).join('')}
+              </div>
+
+              ${rider ? `
+              <div class="rider-card">
+                <div class="rider-avatar">🏍️</div>
+                <div class="rider-info"><h4>${rider.name}</h4><p>Delivery Partner • ⭐ ${rider.rating} • ${rider.vehicle} • ${rider.plate}</p></div>
+                <div class="rider-actions">
+                  <button onclick="showToast('📞 Calling ${rider.name}...')" title="Call">📞</button>
+                  <button onclick="showToast('💬 Chat with ${rider.name}')" title="Chat">💬</button>
+                </div>
+              </div>` : '<div class="rider-card"><div class="rider-avatar">⏳</div><div class="rider-info"><h4>Rider not assigned yet</h4><p>A rider will be assigned shortly</p></div></div>'}
+
+              <div class="address-card">
+                <h4 style="margin-bottom:8px">📍 Delivery Address</h4>
+                <p style="font-weight:600">${order.userName}</p>
+                <p style="color:var(--text2);font-size:.85rem">${order.userAddress||'Address not set'}</p>
+                <p style="color:var(--text2);font-size:.85rem">${order.userPhone}</p>
+              </div>
+
+              <div class="order-items-list">
+                <h4 style="margin-bottom:12px">📦 Order Items</h4>
+                ${order.items.map(i => `<div class="order-item-row"><span>${i.name} <span style="color:var(--text3)">× ${i.qty}</span></span><span>₹${i.price*i.qty}</span></div>`).join('')}
+                <div class="order-item-row" style="font-weight:800;font-size:1rem;border:none;padding-top:12px"><span>Total (COD)</span><span>₹${order.total}</span></div>
+              </div>
+            </div>
+          </div>
+        </div>`;
+
+      // Countdown timer
+      if(order.status !== 'delivered'){
+        setInterval(()=>{
+          remaining = Math.max(0, order.estimatedDelivery - (Date.now() - order.placedAt));
+          const el = document.getElementById('countdown');
+          if(el) el.textContent = remaining > 0 ? fmtTime(remaining) : 'Arriving now! 🎉';
+        }, 1000);
+      }
+
+      // Leaflet Map — uses admin shop settings as delivery origin
+      setTimeout(()=>{
+        const shop = DB.getShopSettings();
+        const destLat = order.userLat || 28.5494;
+        const destLng = order.userLng || 77.2340;
+        const shopLat = shop.lat;
+        const shopLng = shop.lng;
+        // Rider starts from shop, or from their current position if assigned
+        const riderLat = rider ? rider.lat : shopLat;
+        const riderLng = rider ? rider.lng : shopLng;
+
+        // Fit map to show shop + destination
+        const bounds = L.latLngBounds([[shopLat,shopLng],[destLat,destLng]]);
+        const map = L.map('trackingMap',{zoomControl:true}).fitBounds(bounds.pad(0.3));
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{
+          attribution:'©OpenStreetMap ©CARTO',maxZoom:19
+        }).addTo(map);
+
+        // Shop / Store marker (delivery origin)
+        L.marker([shopLat,shopLng],{
+          icon:L.divIcon({html:'<div style="font-size:1.8rem;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6))">🏪</div>',className:'',iconSize:[36,36],iconAnchor:[18,36]})
+        }).addTo(map).bindPopup('<b>'+shop.name+'</b><br>'+shop.address+'<br><span style="color:green">📦 Yahan se delivery hogi</span>');
+
+        // Destination / Customer marker
+        L.marker([destLat,destLng],{
+          icon:L.divIcon({html:'<div style="font-size:1.8rem;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6))">🏠</div>',className:'',iconSize:[36,36],iconAnchor:[18,36]})
+        }).addTo(map).bindPopup('<b>Delivery Location</b><br>'+order.userAddress);
+
+        // Route: Shop → Customer (dashed)
+        L.polyline([[shopLat,shopLng],[destLat,destLng]],{color:'#666',weight:2,dashArray:'6,10',opacity:.5}).addTo(map);
+
+        // Rider marker (animated along route)
+        const riderMarker = L.marker([riderLat,riderLng],{
+          icon:L.divIcon({html:'<div style="font-size:1.8rem;filter:drop-shadow(0 2px 6px rgba(0,0,0,.6))">🏍️</div>',className:'',iconSize:[36,36],iconAnchor:[18,36]})
+        }).addTo(map).bindPopup('<b>'+(rider?rider.name:'Rider')+'</b><br>On the way to you!');
+
+        // Active route: Rider → Customer (solid accent)
+        const activeRoute = L.polyline([[riderLat,riderLng],[destLat,destLng]],{color:'#eab308',weight:3,dashArray:'8,12',opacity:.8}).addTo(map);
+
+        // Delivery area circle around shop
+        L.circle([shopLat,shopLng],{radius:2000,color:'#eab308',fillColor:'#eab308',fillOpacity:0.04,weight:1,dashArray:'6,6'}).addTo(map);
+
+        // Animate rider from current position toward destination
+        if(order.status === 'on_the_way'){
+          let step = 0;
+          const totalSteps = 120;
+          setInterval(()=>{
+            step = Math.min(step+1, totalSteps);
+            const lat = riderLat + (destLat-riderLat)*(step/totalSteps);
+            const lng = riderLng + (destLng-riderLng)*(step/totalSteps);
+            riderMarker.setLatLng([lat,lng]);
+            activeRoute.setLatLngs([[lat,lng],[destLat,destLng]]);
+          }, 2000);
+        }
+      }, 300);
+    }
+  </script>
+</body>
+</html>

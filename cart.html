@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Cart | Voltkart</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+  <div id="app-header"></div>
+  <main class="container">
+    <div class="breadcrumb"><a href="index.html">Home</a> <span>›</span> <span>Shopping Cart</span></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:24px">
+      <h2 class="section-title">🛒 Shopping Cart</h2>
+      <span style="color:var(--accent);font-weight:600">⚡ Estimated Delivery: 10 Minutes</span>
+    </div>
+    <div id="cartContent"></div>
+    <section class="section">
+      <h3 style="margin-bottom:16px;font-size:1rem">👀 People also bought</h3>
+      <div class="also-bought" id="alsoBought"></div>
+    </section>
+  </main>
+  <div id="app-footer"></div>
+  <script src="data.js"></script><script src="app.js"></script>
+  <script>
+    initPage('cart');
+
+    function renderCart(){
+      const cart = DB.getCart();
+      if(!cart.length){
+        document.getElementById('cartContent').innerHTML = `
+          <div class="empty-state"><div class="icon">🛒</div><h3>Your cart is empty</h3><p>Looks like you haven't added anything yet. Let's fix that!</p><a href="listing.html" class="btn btn-accent">🔍 Browse Hardware</a></div>`;
+        return;
+      }
+      const totals = DB.cartTotal();
+      let itemsHTML = cart.map(c => {
+        const p = DB.getProduct(c.productId);
+        if(!p) return '';
+        return `<div class="cart-item">
+          <div class="cart-item-img">${prodEmoji(p)}</div>
+          <div class="cart-item-info">
+            <div class="brand">${p.brand}</div>
+            <h3>${p.name}</h3>
+            <div class="prod-price" style="margin:0"><span class="now">₹${p.price}</span><span class="was">₹${p.mrp}</span></div>
+          </div>
+          <div class="cart-item-actions">
+            <div class="qty-selector">
+              <button onclick="updateQty('${p.id}',-1)">−</button>
+              <span>${c.qty}</span>
+              <button onclick="updateQty('${p.id}',1)">+</button>
+            </div>
+          </div>
+          <div class="cart-item-price">₹${p.price * c.qty}</div>
+          <button class="remove-btn" onclick="removeItem('${p.id}')" title="Remove">✕</button>
+        </div>`;
+      }).join('');
+
+      document.getElementById('cartContent').innerHTML = `
+        <div class="cart-layout">
+          <div>
+            ${itemsHTML}
+            <a href="listing.html" class="btn btn-outline btn-sm" style="margin-top:12px">← Continue Shopping</a>
+          </div>
+          <div class="order-summary">
+            <h3 style="margin-bottom:16px">📋 Order Summary</h3>
+            <div class="summary-row"><span>Items (${totals.items})</span><span>₹${totals.subtotal}</span></div>
+            <div class="summary-row"><span>Delivery</span><span style="color:#22c55e">${totals.delivery===0?'FREE':'₹'+totals.delivery}</span></div>
+            <div class="summary-row"><span>Handling Fee</span><span>₹${totals.handling}</span></div>
+            <div class="summary-row total"><span>Total</span><span>₹${totals.total}</span></div>
+            ${totals.savings > 0 ? `<div class="savings-banner">🎉 You saved ₹${totals.savings} on this order!</div>` : ''}
+            <button class="btn btn-accent" style="width:100%;justify-content:center;margin-top:12px" onclick="placeOrder()">💰 Place Order (Cash on Delivery)</button>
+            <p style="text-align:center;color:var(--text3);font-size:.75rem;margin-top:8px">🔒 Secure Checkout • 💰 Pay on Delivery</p>
+          </div>
+        </div>`;
+    }
+
+    function updateQty(pid, d){
+      const cart = DB.getCart();
+      const item = cart.find(c=>c.productId===pid);
+      if(item){
+        const newQty = item.qty + d;
+        if(newQty < 1) DB.removeFromCart(pid);
+        else DB.updateCartQty(pid, newQty);
+      }
+      renderCart(); renderHeader();
+    }
+
+    function removeItem(pid){
+      DB.removeFromCart(pid);
+      showToast('Item removed');
+      renderCart(); renderHeader();
+    }
+
+    function placeOrder(){
+      if(!DB.isLoggedIn()){showToast('Please login first!');setTimeout(()=>window.location='login.html',800);return;}
+      const result = DB.placeOrder();
+      if(result.ok){
+        showToast('✅ Order placed successfully!');
+        setTimeout(()=>window.location='tracking.html?id='+result.order.id, 1000);
+      } else {
+        showToast('❌ '+result.msg);
+      }
+    }
+
+    renderCart();
+
+    // Also bought
+    const suggestions = DB.getProducts().sort(()=>Math.random()-.5).slice(0,5);
+    document.getElementById('alsoBought').innerHTML = suggestions.map(p =>
+      `<div class="mini-card" onclick="addToCartBtn('${p.id}')">
+        <div class="icon">${prodEmoji(p)}</div>
+        <div class="name">${p.name.split(' ').slice(0,3).join(' ')}</div>
+        <div class="price">₹${p.price}</div>
+      </div>`
+    ).join('');
+  </script>
+</body>
+</html>

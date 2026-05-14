@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Product | Voltkart</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+  <div id="app-header"></div>
+  <main class="container">
+    <div class="breadcrumb"><a href="index.html">Home</a> <span>›</span> <a href="listing.html" id="bcCat">Products</a> <span>›</span> <span id="bcName">...</span></div>
+    <div class="detail-layout" id="detailLayout"></div>
+    <section class="section"><h2 class="section-title">📋 Technical Specifications</h2><table class="specs-table" id="specsTable"></table></section>
+    <section class="section"><h2 class="section-title">⭐ Customer Reviews</h2><div id="reviewsList"></div></section>
+    <section class="section"><h2 class="section-title">🔗 Similar Products</h2><div class="prod-grid" id="similarGrid"></div></section>
+  </main>
+  <div id="app-footer"></div>
+  <script src="data.js"></script><script src="app.js"></script>
+  <script>
+    initPage('product');
+    const pid = new URLSearchParams(location.search).get('id') || 'p1';
+    const P = DB.getProduct(pid);
+    if(!P){document.getElementById('detailLayout').innerHTML='<div class="empty-state"><div class="icon">❌</div><h3>Product not found</h3></div>';throw'';}
+
+    document.title = P.name + ' | Voltkart';
+    document.getElementById('bcCat').textContent = P.category;
+    document.getElementById('bcCat').href = 'listing.html?cat='+P.category;
+    document.getElementById('bcName').textContent = P.name;
+
+    let qty = 1;
+    document.getElementById('detailLayout').innerHTML = `
+      <div>
+        <div class="detail-gallery">${prodEmoji(P)}</div>
+        <div class="detail-thumbs">
+          <div class="thumb active">${prodEmoji(P)}</div>
+          <div class="thumb">📦</div>
+          <div class="thumb">🏷️</div>
+          <div class="thumb">📐</div>
+        </div>
+      </div>
+      <div class="detail-info">
+        <div class="prod-brand" style="font-size:.85rem;margin-bottom:4px">${P.brand}</div>
+        <h1>${P.name}</h1>
+        <div class="detail-meta">
+          <div class="prod-rating"><span class="stars">${stars(P.rating)}</span> ${P.rating} (${P.reviews.toLocaleString()} ratings)</div>
+          <span class="stock-badge">✅ In Stock</span>
+        </div>
+        <div class="detail-price">₹${P.price} <span class="was">MRP ₹${P.mrp}</span> <span class="off">${discount(P)}% off</span></div>
+        <div class="delivery-box">
+          <div class="fast">⚡ Delivery in Under 10 Minutes</div>
+          <div style="color:var(--text2);font-size:.85rem;margin-top:4px">📍 Delivering to Greater Kailash, Delhi</div>
+          <div style="color:var(--text2);font-size:.85rem;margin-top:4px">💰 Pay on Delivery Available</div>
+        </div>
+        <div class="feature-badges">
+          <div class="feature-badge"><strong>Material</strong>Polycarbonate</div>
+          <div class="feature-badge"><strong>Warranty</strong>2 Years</div>
+          <div class="feature-badge"><strong>Rating</strong>${P.specs.current||P.specs.wattage||'—'}</div>
+          <div class="feature-badge"><strong>Install</strong>${P.specs.install||P.specs.mount||'Standard'}</div>
+        </div>
+        <p style="color:var(--text2);font-size:.9rem;margin-bottom:16px">${P.desc}</p>
+        <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px">
+          <div class="qty-selector">
+            <button onclick="changeQty(-1)">−</button>
+            <span id="qtyDisplay">1</span>
+            <button onclick="changeQty(1)">+</button>
+          </div>
+          <button class="btn btn-accent" onclick="addProductToCart()" style="flex:1;justify-content:center" id="addBtn">🛒 ADD TO CART</button>
+        </div>
+        <button class="btn btn-outline" onclick="buyNow()" style="width:100%;justify-content:center">⚡ BUY NOW (Cash on Delivery)</button>
+      </div>`;
+
+    function changeQty(d){qty=Math.max(1,qty+d);document.getElementById('qtyDisplay').textContent=qty;}
+    function addProductToCart(){
+      if(!DB.isLoggedIn()){showToast('Please login first!');setTimeout(()=>window.location='login.html',800);return;}
+      DB.addToCart(pid,qty);showToast('✅ Added to cart!');renderHeader();
+    }
+    function buyNow(){
+      if(!DB.isLoggedIn()){showToast('Please login first!');setTimeout(()=>window.location='login.html',800);return;}
+      DB.addToCart(pid,qty);window.location='cart.html';
+    }
+
+    // Specs
+    document.getElementById('specsTable').innerHTML = Object.entries(P.specs).map(([k,v])=>
+      `<tr><td>${k.replace(/_/g,' ').replace(/\b\w/g,l=>l.toUpperCase())}</td><td style="font-weight:600">${v}</td></tr>`
+    ).join('');
+
+    // Reviews
+    const reviews = [
+      {name:'Rajesh Kumar',date:'2 days ago',rating:5,text:'Amazing service! I was fixing a short circuit and ran out of switches. Ordered from Voltkart and it was at my door in 7 minutes. Quality is genuine.'},
+      {name:'Sumit Arora',date:'1 week ago',rating:4.5,text:'Good build quality and fits perfectly with my existing modular plates. The 10-min delivery is really a lifesaver for contractors like us.'},
+      {name:'Priya Sharma',date:'3 days ago',rating:5,text:'Excellent product! Original and sealed packaging. Will definitely order again.'}
+    ];
+    document.getElementById('reviewsList').innerHTML = reviews.map(r=>
+      `<div class="review-card">
+        <div class="review-header"><div class="review-avatar">${r.name[0]}</div><div><div class="review-name">${r.name}</div><div class="review-date">Verified Purchase • ${r.date}</div></div><div style="margin-left:auto;color:#fbbf24">${stars(r.rating)}</div></div>
+        <div class="review-text">"${r.text}"</div>
+      </div>`
+    ).join('');
+
+    // Similar
+    const similar = DB.getProducts({category:P.category}).filter(p=>p.id!==pid).slice(0,4);
+    document.getElementById('similarGrid').innerHTML = similar.map(p=>productCardHTML(p)).join('');
+  </script>
+</body>
+</html>
