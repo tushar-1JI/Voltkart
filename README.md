@@ -31,5 +31,5 @@ Voltkart lets users browse products, add them to cart, place orders, and track d
 | admin.html | Admin dashboard |
 
 ## Developer
-**Tushar** — Final year AIML Engineering Student  
+**Tushar** — AIML Engineering Student  
 Building real-world projects at the intersection of web and AI.
